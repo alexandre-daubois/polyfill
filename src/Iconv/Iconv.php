@@ -430,32 +430,6 @@ final class Iconv
 
     public static function iconv_strlen($s, $encoding = null)
     {
-        static $hasXml = null;
-        if (null === $hasXml) {
-            $hasXml = \extension_loaded('xml');
-        }
-
-        if ($hasXml) {
-            return self::strlen1($s, $encoding);
-        }
-
-        return self::strlen2($s, $encoding);
-    }
-
-    public static function strlen1($s, $encoding = null)
-    {
-        if (null === $encoding) {
-            $encoding = self::$internalEncoding;
-        }
-        if (0 !== stripos($encoding, 'utf-8') && false === $s = self::iconv($encoding, 'utf-8', $s)) {
-            return false;
-        }
-
-        return \strlen(utf8_decode($s));
-    }
-
-    public static function strlen2($s, $encoding = null)
-    {
         if (null === $encoding) {
             $encoding = self::$internalEncoding;
         }
@@ -740,5 +714,35 @@ final class Iconv
         }
 
         return false;
+    }
+
+    private static function utf8Decode($s)
+    {
+        $s = (string) $s;
+        $len = \strlen($s);
+
+        for ($i = 0, $j = 0; $i < $len; ++$i, ++$j) {
+            switch ($s[$i] & "\xF0") {
+                case "\xC0":
+                case "\xD0":
+                    $c = (\ord($s[$i] & "\x1F") << 6) | \ord($s[++$i] & "\x3F");
+                    $s[$j] = $c < 256 ? \chr($c) : '?';
+                    break;
+
+                case "\xF0":
+                    ++$i;
+                // no break
+
+                case "\xE0":
+                    $s[$j] = '?';
+                    $i += 2;
+                    break;
+
+                default:
+                    $s[$j] = $s[$i];
+            }
+        }
+
+        return substr($s, 0, $j);
     }
 }
